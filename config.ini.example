@@ -1,0 +1,18 @@
+[main]
+
+## Azure connection String
+AZ_CONNECTION_STRING = AzureConnectionStringhere
+
+## Azure account storage
+AZ_CONTAINER_STORAGE = test1234
+
+## Path to logfile
+LOCAL_LOG_FILE = /home/abhi/RSI/Aprio/python/logs.txt
+
+## Local Storage directory
+LOCAL_DIR_STORAGE = /home/abhi/RSI/Aprio/python/Data
+
+## File types according to extensions, Rest every file will goto "Others" directory
+Media = ["mp4"]
+Document = ["xml","xls","txt","xlsx","cxv","doc","docx","pdf","ppt","pptx"]
+Images = ["jpg","gif","bmp","png"]

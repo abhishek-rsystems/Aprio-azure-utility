@@ -1,0 +1,8 @@
+TODO.txt
+Data/*
+!Data/SampleData.zip
+*.pyc
+venv
+scripts/File_Migration_Utility.py
+config.ini
+logs.txt
