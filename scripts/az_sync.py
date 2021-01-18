@@ -4,7 +4,7 @@ This file sync all data from defined data directory to Azure blob storage
 & organize the data according to the schema defined in the config (as after discussion)
 """
 
-import  os, glob, shutil, configparser
+import  os, glob, shutil, configparser, hashlib
 from azure.storage.blob import ContainerClient, BlobServiceClient, BlobClient, ContentSettings
 
 config = configparser.ConfigParser()
@@ -14,6 +14,7 @@ AZ_CONN_STR = config['main']['AZ_CONNECTION_STRING']
 AZ_CONT_STORAGE = config['main']['AZ_CONTAINER_STORAGE']
 # LOC_LOG_FILE = config['main']['LOCAL_LOG_FILE']
 LOC_DIR_STORAGE = config['main']['LOCAL_DIR_STORAGE']
+TMP_DIR = config['main']['TMP_DIR']
 
 """ 
 ## List has issues with configparser, storing them directly.
@@ -49,10 +50,18 @@ else:
     print("[-] Local Directory %s Not Found." % (LOC_DIR_STORAGE))
     exit
 
+## Calculate Hash of File ##
+
+def calcmd5(filename):
+    with open(filename,"rb") as f:
+        bytes = f.read()
+        readable_hash = hashlib.md5(bytes).hexdigest();
+    return readable_hash
+
 ## Structurize files in local, Meeting ID
 
 def organize_local(MEETING_ID):
-    FILES_PATH = os.path.join(LOC_DIR_STORAGE, MEETING_ID)
+    FILES_PATH = os.path.join(TMP_DIR, MEETING_ID)
 
     ## Check Subdirectories Inside Directory, if not then create.
 
@@ -61,8 +70,9 @@ def organize_local(MEETING_ID):
     for subdir in LOC_SUBDIRS:
         subdir_path = os.path.join(FILES_PATH,subdir)
         if os.path.isdir(subdir_path) == False :
-            os.mkdir(subdir_path)
+            os.makedirs(subdir_path,exist_ok=True)
             print("    [%s] Created SubDir [%s]." % (MEETING_ID,subdir))
+            pass
         else:
             print("    [%s] SubDir [%s] already exists." % (MEETING_ID,subdir))
             pass
@@ -71,50 +81,59 @@ def organize_local(MEETING_ID):
     def extensionwise_organize(TYPEPATH,TYPEPATH2):
         filenum = 0
         for EXT in TYPEPATH:
-            # print(EXT)
-            fileset = [file for file in glob.glob(FILES_PATH + "**/*."+EXT, recursive=True)]
-            for file in fileset:
+            fileset = [file for file in glob.glob(os.path.join(LOC_DIR_STORAGE, MEETING_ID) + "**/*."+EXT, recursive=True)]
+            for SRC_FILE in fileset:
                 # print(file)
-                shutil.move(file, os.path.join(FILES_PATH,TYPEPATH2))
+                SRC_FILE_NAME = os.path.basename(SRC_FILE)
+                DST_FILE = os.path.join(FILES_PATH,TYPEPATH2)+'/'+SRC_FILE_NAME+'_'+calcmd5(SRC_FILE)
+                # print(file+" -> "+DST_FILE)
+                shutil.copyfile(SRC_FILE, DST_FILE)
                 filenum += 1
             if len(fileset) == 0 :
                 pass
             else :
-                print("    [%s] Moved %d %s files to %s directory" % (MEETING_ID,len(fileset), EXT, TYPEPATH2) )
+                print("    [%s] Synced %d %s files to %s directory" % (MEETING_ID,len(fileset), EXT, TYPEPATH2) )
                 pass
 
         if filenum > 0:
-            print("    [%s] Moved %d files to %s directory" % (MEETING_ID,filenum, TYPEPATH2) )
+            print("    [%s] TOTAL %d files SYNCED to [%s]" % (MEETING_ID,filenum, TYPEPATH2) )
 
-    extensionwise_organize(Document,"Document")
-    extensionwise_organize(Images,"Images")
-    extensionwise_organize(Media,"Media")
 
     ## Move rest of the files & directores to Others.
     def rest_to_others(SUBDIR):
+        SRC_PATH = os.path.join(LOC_DIR_STORAGE, MEETING_ID)
         filenum = 0
-        target_dir = os.path.join(FILES_PATH,SUBDIR)
-        fileset = os.listdir(FILES_PATH)
+        DST_PATH = os.path.join(FILES_PATH,SUBDIR)
+        fileset = os.listdir(SRC_PATH)
         for file in fileset:
             if file in LOC_SUBDIRS:
                 pass
             else:
-                shutil.move(os.path.join(FILES_PATH, file), target_dir)
+                try:
+                    shutil.copy(os.path.join(SRC_PATH, file), DST_PATH)
+                except Exception as e:
+                    # shutil.copytree(os.path.join(SRC_PATH, file), DST_PATH)
+                    pass
                 filenum += 1
 
         if filenum > 0:
-            print("    [+] Moved %d files to %s directory" % (filenum, SUBDIR) )
+            print("    [+] TOTAL %d files SYNCED to [%s]" % (filenum, SUBDIR) )
 
-    rest_to_others("Others")
+    extensionwise_organize(Document,"Document")
+    extensionwise_organize(Images,"Images")
+    extensionwise_organize(Media,"Media")
+    # rest_to_others("Others")
 
 def azure_upload(MEETING_ID):
-    FILES_PATH = os.path.join(LOC_DIR_STORAGE, MEETING_ID)
+    # FILES_PATH = os.path.join(LOC_DIR_STORAGE, MEETING_ID)
+    FILES_PATH = os.path.join(TMP_DIR, MEETING_ID)
+
     blob_service_client =  BlobServiceClient.from_connection_string(AZ_CONN_STR)
     filenum = 0
     for r,d,f in os.walk(FILES_PATH):        
         if f:
             for file in f:
-                file_path_on_azure = os.path.join(r,file).replace(LOC_DIR_STORAGE,"")
+                file_path_on_azure = os.path.join(r,file).replace(TMP_DIR+'/','')
                 file_path_on_local = os.path.join(r,file)
                 # print(file_path_on_azure, file_path_on_local)
                 blob_client = blob_service_client.get_blob_client(container=AZ_CONT_STORAGE,blob=file_path_on_azure)

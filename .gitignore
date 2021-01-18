@@ -6,3 +6,6 @@ venv
 scripts/File_Migration_Utility.py
 config.ini
 logs.txt
+tmp/*
+!tmp/.gitkeep
+az_sync2.py

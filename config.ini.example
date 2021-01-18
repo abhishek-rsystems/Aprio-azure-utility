@@ -7,12 +7,10 @@ AZ_CONNECTION_STRING = AzureConnectionStringhere
 AZ_CONTAINER_STORAGE = test1234
 
 ## Path to logfile
-LOCAL_LOG_FILE = /home/abhi/RSI/Aprio/python/logs.txt
+LOCAL_LOG_FILE = /home/abhi/RSI/Aprio/Aprio-azure-utility/logs.txt
 
 ## Local Storage directory
-LOCAL_DIR_STORAGE = /home/abhi/RSI/Aprio/python/Data
+LOCAL_DIR_STORAGE = /home/abhi/RSI/Aprio/Aprio-azure-utility/Data
 
-## File types according to extensions, Rest every file will goto "Others" directory
-Media = ["mp4"]
-Document = ["xml","xls","txt","xlsx","cxv","doc","docx","pdf","ppt","pptx"]
-Images = ["jpg","gif","bmp","png"]
+## Keeping Temp files
+TMP_DIR = /home/abhi/RSI/Aprio/Aprio-azure-utility/tmp
