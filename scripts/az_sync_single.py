@@ -156,11 +156,12 @@ def MAINS(MEETING_ID):
 
     FILES_PATH = os.path.join(LOC_DIR_STORAGE, MEETING_ID)
     if os.path.isdir(FILES_PATH) == True:
-        print("[+] Congo its a directory")
+        # print("[+] Congo its a directory")
         print("[+] Processing [%s]" % (MEETING_ID))
         organize_local(MEETING_ID)
         azure_upload(MEETING_ID)
-        print ("Syncing %s" % (MEETING_ID))
+        print ("[+] Synced %s to Azure" % (MEETING_ID))
     else:
-        pass
+        print("[-] ORGID [%s] doesn't exists in Local Data Directory" % (MEETING_ID))
+        exit
 
