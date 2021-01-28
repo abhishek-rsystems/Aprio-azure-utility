@@ -85,7 +85,9 @@ def organize_local(MEETING_ID):
             for SRC_FILE in fileset:
                 # print(file)
                 SRC_FILE_NAME = os.path.basename(SRC_FILE)
-                DST_FILE = os.path.join(FILES_PATH,TYPEPATH2)+'/'+SRC_FILE_NAME+'_'+calcmd5(SRC_FILE)
+                SRC_FILE_HALF_NAME, SRC_FILE_EXT = os.path.splitext(SRC_FILE_NAME)
+                DST_FILE = os.path.join(FILES_PATH,TYPEPATH2)+'/'+SRC_FILE_HALF_NAME+'_'+calcmd5(SRC_FILE)+SRC_FILE_EXT   
+                # DST_FILE = os.path.join(FILES_PATH,TYPEPATH2)+'/'+SRC_FILE_NAME+'_'+calcmd5(SRC_FILE)
                 # print(file+" -> "+DST_FILE)
                 shutil.copyfile(SRC_FILE, DST_FILE)
                 filenum += 1

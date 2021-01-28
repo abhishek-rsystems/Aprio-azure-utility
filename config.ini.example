@@ -14,3 +14,10 @@ LOCAL_DIR_STORAGE = /home/abhi/RSI/Aprio/Aprio-azure-utility/Data
 
 ## Keeping Temp files
 TMP_DIR = /home/abhi/RSI/Aprio/Aprio-azure-utility/tmp
+
+## Database Details ##
+
+DBHOST = tcp:SEZ35MOBILIZE\SQL2017
+DBNAME = AprioSQLPortals 
+DBUSER = sa
+DBPASS = Rsys_1234
