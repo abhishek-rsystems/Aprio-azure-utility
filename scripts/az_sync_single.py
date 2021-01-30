@@ -100,8 +100,6 @@ def db_update(TENANT_CODE,FILE_NAME,FILE_SIZE,AZURE_FILE,EXT):
         # print(i[1:-3])
         FID = i[1:-3]
         update_query("UPDATE AprioBoardPortal.UploadedDoc set FileName = '"+FILE_NAME+"' , FileUrl = '"+AZURE_FILE+"' , FileSize = '"+FILE_SIZE+"' where Id = '"+FID+"' and FileExtension <> '."+EXT+"'")
-    if EXT == '.pdf' :
-        pdf_api(TENANT_ID,TENANT_NAME)
 
 
 ## Structurize files in local, Meeting ID ##
@@ -240,6 +238,7 @@ def MAINS(MEETING_ID):
         print("[+] Processing ORGID [%s]" % (MEETING_ID))
         organize_local(MEETING_ID)
         azure_upload(MEETING_ID)
+        pdf_api(TENANT_ID,TENANT_NAME)
         print ("[+] SUCESSFULLY Synced ORGID [%s] to Azure" % (MEETING_ID))
     else:
         print("[-] ORGID [%s] doesn't exists in Local Data Directory" % (MEETING_ID))
