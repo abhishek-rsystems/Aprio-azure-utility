@@ -1,9 +1,9 @@
 [main]
 
 ## Azure connection String
-AZ_CONNECTION_STRING = AzureConnectionStringhere
+AZ_CONNECTION_STRING = AZURE_STORAGE_CONNECTION_STRING_HERE
 
-## Azure account storage
+## Azure account storage ##
 AZ_CONTAINER_STORAGE = test1234
 
 ## Path to logfile
@@ -17,7 +17,20 @@ TMP_DIR = /home/abhi/RSI/Aprio/Aprio-azure-utility/tmp
 
 ## Database Details ##
 
+[DB_AprioSQLPortals]
 DBHOST = tcp:SEZ35MOBILIZE\SQL2017
 DBNAME = AprioSQLPortals 
-DBUSER = sa
-DBPASS = Rsys_1234
+DBUSER = DBUSER
+DBPASS = DBPASS
+
+[DB_AprioUSDB]
+DBHOST = tcp:SEZ35MOBILIZE\SQL2017
+DBNAME = AprioUSDB 
+DBUSER = DBUSER
+DBPASS = DBPASS
+
+## PDF Conversion API Details ##
+
+[API]
+API_HOST = http://localhost:2000
+API_KEY = migration_key

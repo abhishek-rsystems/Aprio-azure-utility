@@ -19,9 +19,9 @@ print("[+] Connected to Azure.")
 ## Delete the container
 try:
     container_client.delete_container()
-    print("[+] Deleting Container "+AZ_CONT_STORAGE+" .")
+    print("[+] Deleting Container ["+AZ_CONT_STORAGE+"].")
 
 except Exception as e:
-    print("[-] Container already deleted")
+    print("[-] Container ["+AZ_CONT_STORAGE+"] already deleted.")
 
 exit

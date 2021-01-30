@@ -10,3 +10,4 @@ tmp/*
 !tmp/.gitkeep
 !tmp/*.png
 az_sync2.py
+test.py

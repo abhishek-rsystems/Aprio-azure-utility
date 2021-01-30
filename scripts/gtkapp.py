@@ -13,10 +13,10 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 
 TMP_DIR = config['main']['TMP_DIR']
-DBHOST = config['main']['DBHOST']
-DBNAME = config['main']['DBNAME']
-DBUSER = config['main']['DBUSER']
-DBPASS = config['main']['DBPASS']
+DBHOST = config['DB_AprioSQLPortals']['DBHOST']
+DBNAME = config['DB_AprioSQLPortals']['DBNAME']
+DBUSER = config['DB_AprioSQLPortals']['DBUSER']
+DBPASS = config['DB_AprioSQLPortals']['DBPASS']
 
 try:
     cnxn = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};SERVER='+DBHOST+';DATABASE='+DBNAME+';UID='+DBUSER+';PWD='+ DBPASS)
@@ -31,7 +31,7 @@ SQLDATA = ''
 cur.execute(qry)
 row = cur.fetchone()
 while row:
-    #print(row)
+    # print(row)
     str1 = str(row).replace('(','').replace(')',''). replace('\'','')
     l = str1.replace(',',' :')
     SQLDATA = SQLDATA + " , " + l
@@ -53,6 +53,9 @@ def clicksel():
     ORG_ID = values.get(ORG_NAME)
     label.config(text = "Syncing ["+ ORG_ID +"]",width=300)
     MAINS(ORG_ID)
+
+def close():
+    root.destroy
 
 ## Initiate the Box  ##
 root = Tk()
@@ -77,15 +80,16 @@ drop.pack()
 ICON1PATH = os.path.join(TMP_DIR,"sync.png")
 icon1 = PhotoImage(file = r"%s" % ICON1PATH) 
 pim1 = icon1.subsample(x=15,y=15) 
-Button(root, text = '[ SYNC ]', image = pim1, compound = RIGHT, command = clicksel ).pack(side = LEFT) 
+Button(root, text = '[ SYNC ]', image = pim1, compound = RIGHT, command = clicksel ).pack(side = LEFT, padx=20) 
 
 ICON2PATH = os.path.join(TMP_DIR,"exit.png")
 icon2 = PhotoImage(file = r"%s" % ICON2PATH) 
 pim2 = icon2.subsample(x=27,y=27)
-Button(root, text = '[ EXIT ]', image = pim2, compound = RIGHT, command = root.destroy).pack(pady=20, side = RIGHT)
+Button(root, text = '[ EXIT ]', image = pim2, compound = RIGHT, command = close).pack(pady=20, padx=20, side = RIGHT)
  
 label = Label( root , text = " " ) 
 
 label.pack()
+
 ## End construction of Box ##
 root.mainloop()
