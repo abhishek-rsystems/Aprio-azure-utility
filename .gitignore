@@ -4,7 +4,7 @@ Data/*
 *.pyc
 venv
 scripts/File_Migration_Utility.py
-config.ini
+*.ini
 logs.txt
 tmp/*
 !tmp/.gitkeep
