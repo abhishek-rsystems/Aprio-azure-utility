@@ -8,15 +8,16 @@ from tkinter import *
 from tkinter.ttk import *
 
 from az_sync_single import *
+import DataMigrationUtility as dm
 
 config = configparser.ConfigParser()
 config.read('config.ini')
 
 TMP_DIR = config['main']['TMP_DIR']
-DBHOST = config['DB_AprioSQLPortals']['DBHOST']
-DBNAME = config['DB_AprioSQLPortals']['DBNAME']
-DBUSER = config['DB_AprioSQLPortals']['DBUSER']
-DBPASS = config['DB_AprioSQLPortals']['DBPASS']
+DBHOST = config['sourcedb']['src_server']
+DBNAME = config['sourcedb']['src_db']
+DBUSER = config['sourcedb']['src_user']
+DBPASS = config['sourcedb']['src_pwd']
 
 try:
     cnxn = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};SERVER='+DBHOST+';DATABASE='+DBNAME+';UID='+DBUSER+';PWD='+ DBPASS)
@@ -52,7 +53,8 @@ def clicksel():
     ORG_NAME = str(clicked.get())
     ORG_ID = values.get(ORG_NAME)
     label.config(text = "Syncing ["+ ORG_ID +"]",width=300)
-    MAINS(ORG_ID)
+    dm.MigrateData(ORG_ID) #data migration with password encryption
+    #MAINS(ORG_ID) #file migration with pdf conversion
 
 def close():
     root.destroy

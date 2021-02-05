@@ -16,17 +16,21 @@ AZ_CONT_STORAGE = config['main']['AZ_CONTAINER_STORAGE']
 LOC_DIR_STORAGE = config['main']['LOCAL_DIR_STORAGE']
 TMP_DIR = config['main']['TMP_DIR']
 
-DBHOST = config['DB_AprioUSDB']['DBHOST']
-DBNAME = config['DB_AprioUSDB']['DBNAME']
-DBUSER = config['DB_AprioUSDB']['DBUSER']
-DBPASS = config['DB_AprioUSDB']['DBPASS']
+DBHOST = config['destdb']['dst_server']
+DBNAME = config['destdb']['dst_db']
+DBUSER = config['destdb']['dst_user']
+DBPASS = config['destdb']['dst_pwd']
 
-API_HOST = config['API']['API_HOST']
-API_KEY = config['API']['API_KEY']
+API_HOST = config['PDF_API']['API_HOST']
+API_KEY = config['PDF_API']['API_KEY']
 
 Media = ["mp4"]
 Document = ["xml","xls","txt","xlsx","cxv","doc","docx","pdf","ppt","pptx"]
 Images = ["jpg","gif","bmp","png"]
+
+TENANT_ID = 0
+TENANT_NAME = ''
+
 
 ## Calculate Hash of File ##
 
@@ -66,18 +70,7 @@ def select_query(qry):
 def update_query(qry):
     cur2.execute(qry)
 
-def password_api(TenantID):
-    url = API_HOST+"/api/command/MigrationCommand/UpdatePasswordHash"
-    querystring = {"tenantId":TenantID,"migrationKey":API_KEY}
-    headers = {
-    'cache-control': "no-cache"
-    }
-    try:
-        response = requests.request("POST", url, headers=headers, params=querystring)
-        print(response.text())
-    except Exception as e:
-        print("[API] FAILED Password API @ %s" %(API_HOST))
-        # exit()
+
 
 def pdf_api(TENANT_ID,TENANT_NAME):
     url = API_HOST+"/api/command/MigrationCommand/BulkUpload"
@@ -211,7 +204,7 @@ def MAINS(MEETING_ID):
     container_client = ContainerClient.from_connection_string(conn_str=AZ_CONN_STR, container_name=AZ_CONT_STORAGE)
     print("[+] Connected to Azure.")
 
-    password_api(MEETING_ID)
+    
 
     ## Check if container Exists, If not then create.
     try:
