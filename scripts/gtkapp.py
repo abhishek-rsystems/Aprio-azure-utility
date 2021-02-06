@@ -54,10 +54,11 @@ def clicksel():
     ORG_ID = values.get(ORG_NAME)
     label.config(text = "Syncing ["+ ORG_ID +"]",width=300)
     dm.MigrateData(ORG_ID) #data migration with password encryption
-    #MAINS(ORG_ID) #file migration with pdf conversion
+    MAINS(ORG_ID) #file migration with pdf conversion
 
 def close():
-    root.destroy
+    global root
+    root.quit()
 
 ## Initiate the Box  ##
 root = Tk()
