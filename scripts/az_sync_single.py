@@ -15,6 +15,8 @@ AZ_CONT_STORAGE = config['main']['AZ_CONTAINER_STORAGE']
 # LOC_LOG_FILE = config['main']['LOCAL_LOG_FILE']
 LOC_DIR_STORAGE = config['main']['LOCAL_DIR_STORAGE']
 TMP_DIR = config['main']['TMP_DIR']
+AZ_CONTAINER_LINK = config['main']['AZ_CONTAINER_LINK']
+
 
 DBHOST = config['destdb']['dst_server']
 DBNAME = config['destdb']['dst_db']
@@ -25,8 +27,8 @@ API_HOST = config['PDF_API']['API_HOST']
 API_KEY = config['PDF_API']['API_KEY']
 
 Media = ["mp4"]
-Document = ["xml","xls","txt","xlsx","cxv","doc","docx","pdf","ppt","pptx"]
-Images = ["jpg","gif","bmp","png"]
+Document = ["csv","html","htm","pptx","potx","potm","txt","dotx","dot","docx","docm","doc","xltm","xlsx","xlsb","xls","rtf","pdf"]
+Images = ["jpg","gif","bmp","png","jpeg"]
 
 ## Calculate Hash of File ##
 
@@ -74,6 +76,7 @@ def pdf_api(TENANT_ID,TENANT_NAME,TENANT_CODE):
     try:
         response = requests.request("POST", url, headers=headers, params=querystring)
         print("    [API] PDF API STATUS = %s" %(response.status_code))
+        # print(response.text)
     except Exception as e:
         print(e)
         print("    [API] FAILED PDF API @ %s" %(API_HOST))
@@ -106,10 +109,13 @@ def  db_update_xfdf(XFDF_FILE,AZURE_FILE):
         pass
 
 ## Function to Update Db for IMAGE files ##
-def  db_update_profile_images(IMAGE_FILE,AZURE_FILE):
+def  db_update_profile_images(IMAGE_FILE,AZURE_FILE,MEETING_ID):
     try:
-        print("TODO IMAGE UPDATE POST DISCUSSION")
+        update_query("Update AprioBoardPortal.Contact set ProfileImageUrl = '"+AZURE_FILE+"'  , ProfileImageThubUrl = '"+AZURE_FILE+"' where ProfileImageUrl = '"+IMAGE_FILE+"'")
+        update_query("Update AprioBoardPortal.Tenant set Logo = '"+AZURE_FILE+"' where Code = '"+MEETING_ID+"' and Logo = '"+IMAGE_FILE+"'")
+        cur2.commit()
     except Exception as e:
+        print("    [LOCAL] EXCEPTION in DB update : %s" % (e))
         pass
 
 ## Structurize files in local, Meeting ID ##
@@ -152,7 +158,7 @@ def organize_local(MEETING_ID):
                 FILE_NAME = SRC_FILE_NAME
                 TENANT_CODE = str(MEETING_ID)
                 EXT = str(SRC_FILE_EXT)
-                AZURE_FILE = str(MEETING_ID+'/'+TYPEPATH2+'/'+SRC_FILE_HALF_NAME+'_'+calcmd5(SRC_FILE)+SRC_FILE_EXT)
+                AZURE_FILE = str(AZ_CONTAINER_LINK+MEETING_ID+'/'+TYPEPATH2+'/'+SRC_FILE_HALF_NAME+'_'+calcmd5(SRC_FILE)+SRC_FILE_EXT)
                 db_update_all(TENANT_CODE,FILE_NAME,FILE_SIZE,AZURE_FILE,EXT)
 
             if len(fileset) == 0 :
@@ -199,15 +205,35 @@ def organize_local(MEETING_ID):
                         filenum += 1
                         SRC_PATH = os.path.join(LOCAL_TEMP_DIR, checkfile)
                         shutil.copy(SRC_PATH, DST_PATH)
-                        AZURE_FILE = str(MEETING_ID+"/Others/"+checkfile)
+                        AZURE_FILE = str(AZ_CONTAINER_LINK+MEETING_ID+"/Others/"+checkfile)
                         db_update_xfdf(checkfile,AZURE_FILE)
         print("    [LOCAL] Synced %d %s files to [Others]" % (filenum, ".xfdf") )
 
 
     def profile_images_organize(MEETING_ID):
-        """
-        This function will sync images according to provided DB, needs to discuss about query.
-        """
+
+        LOCAL_DATA_DIR = os.path.join(LOC_DIR_STORAGE,MEETING_ID)
+        SRC_PATH = os.path.join(LOCAL_DATA_DIR,"Images")
+
+        LOCAL_TMP_DIR = os.path.join(TMP_DIR, MEETING_ID)
+        DST_PATH = os.path.join(LOCAL_TMP_DIR,"Images")
+
+        filenum = 0
+        for path, currentDirectory, files in os.walk(SRC_PATH):
+            for file in files:
+                checkfile = file
+                filenum += 1
+                SRC_FILE = os.path.join(SRC_PATH, checkfile)
+                filename, file_extension = os.path.splitext(checkfile)
+                filehash = calcmd5(SRC_FILE)
+                NEW_FILE_NAME = filename+'_'+filehash+file_extension
+                DST_FILE = os.path.join(DST_PATH,NEW_FILE_NAME)
+                shutil.copy(SRC_FILE, DST_FILE)
+
+                AZURE_FILE = str(AZ_CONTAINER_LINK+MEETING_ID+"/Images/"+checkfile)
+                db_update_profile_images(checkfile,AZURE_FILE,MEETING_ID)
+
+        print("    [LOCAL] Synced %d Profile Images to [Images]" % (filenum) )
         pass
 
     profile_images_organize(MEETING_ID)
@@ -244,7 +270,7 @@ def azure_upload(MEETING_ID):
                         # print("%s == %s" %(azure_hash, local_hash))
                         if azure_hash == local_hash:
                             ## Skip upload if hash matched ##
-                            print("    [AZURE] Checksum Matched, Skipping Upload [%s]" % (file_path_on_azure))
+                            print("    [AZURE] Checksum Matched, Skipping [%s]" % (file_path_on_azure))
                         else:
                             ## Reupload if hash is not matching ##
                             blob_client.upload_blob(data,content_settings=content_setting,overwrite=True)
