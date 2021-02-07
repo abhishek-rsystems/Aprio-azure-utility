@@ -67,14 +67,15 @@ def select_query(qry):
 def update_query(qry):
     cur2.execute(qry)
 
-def pdf_api(TENANT_ID,TENANT_NAME):
+def pdf_api(TENANT_ID,TENANT_NAME,TENANT_CODE):
     url = API_HOST+"/api/command/MigrationCommand/BulkUpload"
-    querystring = {"tenantId":TENANT_ID,"tenantName":TENANT_NAME,"migrationKey":API_KEY}
+    querystring = {"tenantId":TENANT_ID,"tenantName":TENANT_NAME,"tenantCode":TENANT_CODE,"migrationKey":API_KEY}
     headers = { 'cache-control': "no-cache" }
     try:
         response = requests.request("POST", url, headers=headers, params=querystring)
-        print(response.text())
+        print("    [API] PDF API STATUS = %s" %(response.status_code))
     except Exception as e:
+        print(e)
         print("    [API] FAILED PDF API @ %s" %(API_HOST))
         # exit()
 
@@ -87,18 +88,21 @@ def db_update_all(TENANT_CODE,FILE_NAME,FILE_SIZE,AZURE_FILE,EXT):
     TENANT_ID = select_query("select Id from AprioBoardPortal.Tenant where Code = '"+TENANT_CODE+"'")
     FILE_IDS = select_query("select id from AprioBoardPortal.UploadedDoc where FileName = '"+FILE_NAME+"' and TenantId = '"+TENANT_ID+"'")
     for i in FILE_IDS.split (","):
-        # print(i[1:-3])
-        FID = i[1:-3]
+        FID = i[1:-4]
         try:
-            update_query("UPDATE AprioBoardPortal.UploadedDoc set FileName = '"+FILE_NAME+"' , FileUrl = '"+AZURE_FILE+"' , FileSize = '"+FILE_SIZE+"' where Id = '"+FID+"' and FileExtension <> '."+EXT+"'")
+            update_query("UPDATE AprioBoardPortal.UploadedDoc set FileName = '"+FILE_NAME+"' , FileUrl = '"+AZURE_FILE+"' , FileSize = '"+FILE_SIZE+"' where Id = '"+FID+"' and FileExtension = '"+EXT+"'")
+            cur2.commit()
         except Exception as e:
+            print("    [LOCAL] EXCEPTION in DB update : %s" % (e))
             pass
 
 ## Function to Update Db for XFDF files ##
 def  db_update_xfdf(XFDF_FILE,AZURE_FILE):
     try:
         update_query("Update AprioBoardPortal.Annotation set AnnotationLink = '"+AZURE_FILE+"' where AnnotationLink  = '"+XFDF_FILE+"'")
+        cur2.commit()
     except Exception as e:
+        print("    [LOCAL] EXCEPTION in DB update : %s" % (e))
         pass
 
 ## Function to Update Db for IMAGE files ##
@@ -159,7 +163,6 @@ def organize_local(MEETING_ID):
 
         if filenum > 0:
             print("    [LOCAL] TOTAL %d files Synced to [%s]" % (filenum, TYPEPATH2) )
-
 
     ## Move rest of the files & directores to Others ##
     def rest_to_others(SUBDIR):
@@ -287,7 +290,7 @@ def MAINS(MEETING_ID):
         print("[+] Processing ORGID [%s]" % (MEETING_ID))
         organize_local(MEETING_ID)
         azure_upload(MEETING_ID)
-        pdf_api(TENANT_ID,TENANT_NAME)
+        pdf_api(TENANT_ID,TENANT_NAME,MEETING_ID)
         print ("[+] SUCESSFULLY Synced ORGID [%s] to Azure" % (MEETING_ID))
     else:
         print("[-] ORGID [%s] doesn't exists in Local Data Directory" % (MEETING_ID))
