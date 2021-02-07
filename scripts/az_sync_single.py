@@ -66,6 +66,21 @@ def select_query(qry):
     # test_str = SQLDATA[1:] ; print(test_str)
     return SQLDATA[3:-3]
 
+def select_query_with_brack(qry):
+    # print("\nQUERY => %s\n" %(query))
+    global SQLDATA
+    SQLDATA = ''
+    cur2.execute(qry)
+    row = cur2.fetchone()
+    while row: 
+        str1 = str(row). replace('\'','')
+        l = str1.replace(',',' :')
+        SQLDATA = SQLDATA + " , " + l
+        row = cur2.fetchone()
+    # test_str = SQLDATA[1:] ; print(test_str)``
+    return SQLDATA[2:-3]
+
+
 def update_query(qry):
     cur2.execute(qry)
 
@@ -85,10 +100,11 @@ def pdf_api(TENANT_ID,TENANT_NAME,TENANT_CODE):
 ## Db Update Functions ##
 TENANT_ID = 0
 TENANT_NAME = ''
+
 ## Function to Update Db for All files ##
-def db_update_all(TENANT_CODE,FILE_NAME,FILE_SIZE,AZURE_FILE,EXT):
-    TENANT_NAME = select_query("select NAME from AprioBoardPortal.Tenant where Code = '"+TENANT_CODE+"'")
-    TENANT_ID = select_query("select Id from AprioBoardPortal.Tenant where Code = '"+TENANT_CODE+"'")
+def db_update_all(TENANT_CODE,FILE_NAME,FILE_SIZE,AZURE_FILE,EXT, TENANT_ID):
+    FILE_NAME = FILE_NAME.replace("'","''")
+    # TENANT_NAME = select_query("select NAME from AprioBoardPortal.Tenant where Code = '"+TENANT_CODE+"'")
     FILE_IDS = select_query("select id from AprioBoardPortal.UploadedDoc where FileName = '"+FILE_NAME+"' and TenantId = '"+TENANT_ID+"'")
     for i in FILE_IDS.split (","):
         FID = i[1:-4]
@@ -118,10 +134,36 @@ def  db_update_profile_images(IMAGE_FILE,AZURE_FILE,MEETING_ID):
         print("    [LOCAL] EXCEPTION in DB update : %s" % (e))
         pass
 
+## Signature Update #
+
+def db_update_signatures(FILE_NAME,AZURE_FILE,TENANT_ID):
+    try:
+        # print("Update AprioBoardPortal.DocSignature set SignatureProofDocId = '"+AZURE_FILE+"' where TenantId = '"+TENANT_ID+"' and SignatureProofDocId = '"+FILE_NAME+"'")
+        update_query("Update AprioBoardPortal.DocSignature set SignatureProofDocId = '"+AZURE_FILE+"' where TenantId = '"+TENANT_ID+"' and SignatureProofDocId = '"+FILE_NAME+"'")
+        cur2.commit()
+    except Exception as e:
+        print("    [LOCAL] EXCEPTION in DB update : %s" % (e))
+    pass
+
+def load_signatures_list(TENANT_ID):
+    signature_file_list = []
+    FILE_IDS = select_query_with_brack("select SignatureProofDocId from AprioBoardPortal.DocSignature where TenantId = '"+TENANT_ID+"'")
+    for i in FILE_IDS.split (","):
+        FID = i[2:-5]
+        if FID == '':
+            pass
+        else:
+            #print("["+FID+"]")
+            signature_file_list.append(FID)
+            pass
+    return signature_file_list
+
 ## Structurize files in local, Meeting ID ##
 def organize_local(MEETING_ID):
-    FILES_PATH = os.path.join(TMP_DIR, MEETING_ID)
+    TENANT_ID = select_query("select Id from AprioBoardPortal.Tenant where Code = '"+MEETING_ID+"'")
+    signature_file_list = load_signatures_list(TENANT_ID)
 
+    FILES_PATH = os.path.join(TMP_DIR, MEETING_ID)
     ## Check Subdirectories Inside Directory, if not then create.
     LOC_SUBDIRS = [ 'Document','Images','Media', 'Others' ]
 
@@ -137,6 +179,7 @@ def organize_local(MEETING_ID):
 
     ## Move files according to extensions , into respective directories.
     def extensionwise_organize(TYPEPATH,TYPEPATH2):
+        print("    [LOCAL] Processing %s Files" % (TYPEPATH2))
         filenum = 0
         for EXT in TYPEPATH:
             fileset = [file for file in glob.glob(os.path.join(LOC_DIR_STORAGE, MEETING_ID) + "**/*."+EXT, recursive=True)]
@@ -159,7 +202,11 @@ def organize_local(MEETING_ID):
                 TENANT_CODE = str(MEETING_ID)
                 EXT = str(SRC_FILE_EXT)
                 AZURE_FILE = str(AZ_CONTAINER_LINK+MEETING_ID+'/'+TYPEPATH2+'/'+SRC_FILE_HALF_NAME+'_'+calcmd5(SRC_FILE)+SRC_FILE_EXT)
-                db_update_all(TENANT_CODE,FILE_NAME,FILE_SIZE,AZURE_FILE,EXT)
+                db_update_all(TENANT_CODE,FILE_NAME,FILE_SIZE,AZURE_FILE,EXT,TENANT_ID)
+                # print("[%s]"%(FILE_NAME))
+                if FILE_NAME in signature_file_list: 
+                    # print("Updating %s in LIST" % (FILE_NAME))
+                    db_update_signatures(FILE_NAME,AZURE_FILE,TENANT_ID)
 
             if len(fileset) == 0 :
                 pass
@@ -192,6 +239,7 @@ def organize_local(MEETING_ID):
 
 
     def xfdf_organize(MEETING_ID):
+        print("    [LOCAL] Processing XFDF Files")
         FILES_PATH = os.path.join(TMP_DIR, MEETING_ID)
         DST_PATH = os.path.join(FILES_PATH,"Others")
         LOCAL_TEMP_DIR = os.path.join(LOC_DIR_STORAGE,"Temp")
@@ -211,13 +259,11 @@ def organize_local(MEETING_ID):
 
 
     def profile_images_organize(MEETING_ID):
-
+        print("    [LOCAL] Processing Profile Images")
         LOCAL_DATA_DIR = os.path.join(LOC_DIR_STORAGE,MEETING_ID)
         SRC_PATH = os.path.join(LOCAL_DATA_DIR,"Images")
-
         LOCAL_TMP_DIR = os.path.join(TMP_DIR, MEETING_ID)
         DST_PATH = os.path.join(LOCAL_TMP_DIR,"Images")
-
         filenum = 0
         for path, currentDirectory, files in os.walk(SRC_PATH):
             for file in files:
@@ -229,7 +275,6 @@ def organize_local(MEETING_ID):
                 NEW_FILE_NAME = filename+'_'+filehash+file_extension
                 DST_FILE = os.path.join(DST_PATH,NEW_FILE_NAME)
                 shutil.copy(SRC_FILE, DST_FILE)
-
                 AZURE_FILE = str(AZ_CONTAINER_LINK+MEETING_ID+"/Images/"+checkfile)
                 db_update_profile_images(checkfile,AZURE_FILE,MEETING_ID)
 
@@ -238,11 +283,9 @@ def organize_local(MEETING_ID):
 
     profile_images_organize(MEETING_ID)
     xfdf_organize(MEETING_ID)
-
     extensionwise_organize(Document,"Document")
     extensionwise_organize(Images,"Images")
     extensionwise_organize(Media,"Media")
-    # rest_to_others("Others")
 
 def azure_upload(MEETING_ID):
     # FILES_PATH = os.path.join(LOC_DIR_STORAGE, MEETING_ID)
