@@ -17,7 +17,6 @@ LOC_DIR_STORAGE = config['main']['LOCAL_DIR_STORAGE']
 TMP_DIR = config['main']['TMP_DIR']
 AZ_CONTAINER_LINK = config['main']['AZ_CONTAINER_LINK']
 
-
 DBHOST = config['destdb']['dst_server']
 DBNAME = config['destdb']['dst_db']
 DBUSER = config['destdb']['dst_user']
@@ -59,26 +58,11 @@ def select_query(qry):
     cur2.execute(qry)
     row = cur2.fetchone()
     while row: 
-        str1 = str(row).replace('(','').replace(')',''). replace('\'','')
-        l = str1.replace(',',' :')
-        SQLDATA = SQLDATA + " , " + l
-        row = cur2.fetchone()
-    # test_str = SQLDATA[1:] ; print(test_str)
-    return SQLDATA[3:-3]
-
-def select_query_with_brack(qry):
-    # print("\nQUERY => %s\n" %(query))
-    global SQLDATA
-    SQLDATA = ''
-    cur2.execute(qry)
-    row = cur2.fetchone()
-    while row: 
         str1 = str(row). replace('\'','')
         l = str1.replace(',',' :')
         SQLDATA = SQLDATA + " , " + l
         row = cur2.fetchone()
-    # test_str = SQLDATA[1:] ; print(test_str)``
-    return SQLDATA[2:-3]
+    return SQLDATA
 
 
 def update_query(qry):
@@ -107,13 +91,17 @@ def db_update_all(TENANT_CODE,FILE_NAME,FILE_SIZE,AZURE_FILE,EXT, TENANT_ID):
     # TENANT_NAME = select_query("select NAME from AprioBoardPortal.Tenant where Code = '"+TENANT_CODE+"'")
     FILE_IDS = select_query("select id from AprioBoardPortal.UploadedDoc where FileName = '"+FILE_NAME+"' and TenantId = '"+TENANT_ID+"'")
     for i in FILE_IDS.split (","):
-        FID = i[1:-4]
-        try:
-            update_query("UPDATE AprioBoardPortal.UploadedDoc set FileName = '"+FILE_NAME+"' , FileUrl = '"+AZURE_FILE+"' , FileSize = '"+FILE_SIZE+"' where Id = '"+FID+"' and FileExtension = '"+EXT+"'")
-            cur2.commit()
-        except Exception as e:
-            print("    [LOCAL] EXCEPTION in DB update : %s" % (e))
+        FID = i[2:-4].replace(' ','')
+        if FID == '':
             pass
+        else:
+            try:
+                #print("UPDATE AprioBoardPortal.UploadedDoc set FileName = '"+FILE_NAME+"' , FileUrl = '"+AZURE_FILE+"' , FileSize = '"+FILE_SIZE+"' where Id = '"+FID+"' and FileExtension = '"+EXT+"'")
+                update_query("UPDATE AprioBoardPortal.UploadedDoc set FileName = '"+FILE_NAME+"' , FileUrl = '"+AZURE_FILE+"' , FileSize = '"+FILE_SIZE+"' where Id = '"+FID+"' and FileExtension = '"+EXT+"'")
+                cur2.commit()
+            except Exception as e:
+                print("    [LOCAL] EXCEPTION in DB update : %s" % (e))
+                pass
 
 ## Function to Update Db for XFDF files ##
 def  db_update_xfdf(XFDF_FILE,AZURE_FILE):
@@ -147,13 +135,12 @@ def db_update_signatures(FILE_NAME,AZURE_FILE,TENANT_ID):
 
 def load_signatures_list(TENANT_ID):
     signature_file_list = []
-    FILE_IDS = select_query_with_brack("select SignatureProofDocId from AprioBoardPortal.DocSignature where TenantId = '"+TENANT_ID+"'")
+    FILE_IDS = select_query("select SignatureProofDocId from AprioBoardPortal.DocSignature where TenantId = '"+TENANT_ID+"'")
     for i in FILE_IDS.split (","):
-        FID = i[2:-5]
+        FID = i[2:-4].replace(' ','')
         if FID == '':
             pass
         else:
-            #print("["+FID+"]")
             signature_file_list.append(FID)
             pass
     return signature_file_list
@@ -161,6 +148,7 @@ def load_signatures_list(TENANT_ID):
 ## Structurize files in local, Meeting ID ##
 def organize_local(MEETING_ID):
     TENANT_ID = select_query("select Id from AprioBoardPortal.Tenant where Code = '"+MEETING_ID+"'")
+    TENANT_ID = TENANT_ID[4:-4]
     signature_file_list = load_signatures_list(TENANT_ID)
 
     FILES_PATH = os.path.join(TMP_DIR, MEETING_ID)
@@ -237,7 +225,6 @@ def organize_local(MEETING_ID):
         if filenum > 0:
             print("    [LOCAL] TOTAL %d files Synced to [%s]" % (filenum, SUBDIR) )
 
-
     def xfdf_organize(MEETING_ID):
         print("    [LOCAL] Processing XFDF Files")
         FILES_PATH = os.path.join(TMP_DIR, MEETING_ID)
@@ -275,7 +262,7 @@ def organize_local(MEETING_ID):
                 NEW_FILE_NAME = filename+'_'+filehash+file_extension
                 DST_FILE = os.path.join(DST_PATH,NEW_FILE_NAME)
                 shutil.copy(SRC_FILE, DST_FILE)
-                AZURE_FILE = str(AZ_CONTAINER_LINK+MEETING_ID+"/Images/"+checkfile)
+                AZURE_FILE = str(AZ_CONTAINER_LINK+MEETING_ID+"/Images/"+NEW_FILE_NAME)
                 db_update_profile_images(checkfile,AZURE_FILE,MEETING_ID)
 
         print("    [LOCAL] Synced %d Profile Images to [Images]" % (filenum) )
@@ -297,6 +284,7 @@ def azure_upload(MEETING_ID):
         if f:
             for file in f:
                 file_path_on_azure = os.path.join(r,file).replace(TMP_DIR+'/','')
+                #file_path_on_azure = os.path.join(r,file).replace(TMP_DIR+"\\","")
                 file_path_on_local = os.path.join(r,file)
                 # print(file_path_on_azure, file_path_on_local)
                 blob_client = blob_service_client.get_blob_client(container=AZ_CONT_STORAGE,blob=file_path_on_azure)
