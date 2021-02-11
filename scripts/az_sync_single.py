@@ -90,7 +90,7 @@ def db_update_all(TENANT_CODE,FILE_NAME,FILE_SIZE,AZURE_FILE,EXT, TENANT_ID):
             pass
         else:
             try:
-                if EXT == '.pdf':
+                if EXT.lower() == '.pdf':
                     update_query("UPDATE AprioBoardPortal.UploadedDoc set PdfUrl = '"+AZURE_FILE+"' , PdfSize = '"+FILE_SIZE+"' where Id = '"+FID+"' and FileName = '"+FILE_NAME+"'")
                 else:
                     update_query("UPDATE AprioBoardPortal.UploadedDoc set FileUrl = '"+AZURE_FILE+"' , FileSize = '"+FILE_SIZE+"' where Id = '"+FID+"' and FileName = '"+FILE_NAME+"'")
@@ -157,7 +157,7 @@ def azure_upload(LOCAL_FILE,AZURE_FILE):
     with open(LOCAL_FILE, "rb") as data:
         try:
             blob_client.upload_blob(data,content_settings=content_setting,overwrite=True,validate_content=True)
-            print("    [AZURE] Uploaded %s " % (AZURE_FILE), end='\r')
+            print("    [AZURE] Uploaded %s " % (AZURE_FILE))
         except Exception as e:
             pass
 
