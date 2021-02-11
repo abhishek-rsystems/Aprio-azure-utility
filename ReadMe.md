@@ -70,5 +70,5 @@ Select Organization Name & Click `Sync` on the Utility
 
 
 <p align="center">
-<img src="tmp/refimage1.png" alt="Utility" title="Utility" />
+<img src="appdata/images/refimage1.png" alt="Utility" title="Utility" />
 </p>
