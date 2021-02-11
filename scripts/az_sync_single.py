@@ -64,18 +64,21 @@ def select_query(qry):
         row = cur2.fetchone()
     return SQLDATA
 
-
 def update_query(qry):
     cur2.execute(qry)
 
 def pdf_api(TENANT_ID,TENANT_NAME,TENANT_CODE):
     url = API_HOST+"/api/command/MigrationCommand/BulkUpload"
-    querystring = {"tenantId":TENANT_ID,"tenantName":TENANT_NAME,"tenantCode":TENANT_CODE,"migrationKey":API_KEY}
+    TENANT_ID = select_query("select Id from AprioBoardPortal.Tenant where Code = '"+TENANT_CODE+"'")
+    TENANT_ID = TENANT_ID[4:-4]
+    print(TENANT_ID)
+    print(TENANT_CODE)
+    querystring = {"tenantId":TENANT_ID,"tenantCode":TENANT_CODE,"migrationKey":API_KEY}
     headers = { 'cache-control': "no-cache" }
     try:
         response = requests.request("POST", url, headers=headers, params=querystring)
         print("    [API] PDF API STATUS = %s" %(response.status_code))
-        # print(response.text)
+        print(response.text)
     except Exception as e:
         print(e)
         print("    [API] FAILED PDF API @ %s" %(API_HOST))
@@ -88,6 +91,7 @@ TENANT_NAME = ''
 ## Function to Update Db for All files ##
 def db_update_all(TENANT_CODE,FILE_NAME,FILE_SIZE,AZURE_FILE,EXT, TENANT_ID):
     FILE_NAME = FILE_NAME.replace("'","''")
+    AZURE_FILE = AZURE_FILE.replace("'","''")
     # TENANT_NAME = select_query("select NAME from AprioBoardPortal.Tenant where Code = '"+TENANT_CODE+"'")
     FILE_IDS = select_query("select id from AprioBoardPortal.UploadedDoc where FileName = '"+FILE_NAME+"' and TenantId = '"+TENANT_ID+"'")
     for i in FILE_IDS.split (","):
@@ -97,7 +101,7 @@ def db_update_all(TENANT_CODE,FILE_NAME,FILE_SIZE,AZURE_FILE,EXT, TENANT_ID):
         else:
             try:
                 #print("UPDATE AprioBoardPortal.UploadedDoc set FileName = '"+FILE_NAME+"' , FileUrl = '"+AZURE_FILE+"' , FileSize = '"+FILE_SIZE+"' where Id = '"+FID+"' and FileExtension = '"+EXT+"'")
-                update_query("UPDATE AprioBoardPortal.UploadedDoc set FileName = '"+FILE_NAME+"' , FileUrl = '"+AZURE_FILE+"' , FileSize = '"+FILE_SIZE+"' where Id = '"+FID+"' and FileExtension = '"+EXT+"'")
+                update_query("UPDATE AprioBoardPortal.UploadedDoc set FileUrl = '"+AZURE_FILE+"' , FileSize = '"+FILE_SIZE+"' where Id = '"+FID+"' and FileName = '"+FILE_NAME+"'")
                 cur2.commit()
             except Exception as e:
                 print("    [LOCAL] EXCEPTION in DB update : %s" % (e))
@@ -105,6 +109,8 @@ def db_update_all(TENANT_CODE,FILE_NAME,FILE_SIZE,AZURE_FILE,EXT, TENANT_ID):
 
 ## Function to Update Db for XFDF files ##
 def  db_update_xfdf(XFDF_FILE,AZURE_FILE):
+    XFDF_FILE = XFDF_FILE.replace("'","''")
+    AZURE_FILE = AZURE_FILE.replace("'","''")
     try:
         update_query("Update AprioBoardPortal.Annotation set AnnotationLink = '"+AZURE_FILE+"' where AnnotationLink  = '"+XFDF_FILE+"'")
         cur2.commit()
@@ -114,6 +120,8 @@ def  db_update_xfdf(XFDF_FILE,AZURE_FILE):
 
 ## Function to Update Db for IMAGE files ##
 def  db_update_profile_images(IMAGE_FILE,AZURE_FILE,MEETING_ID):
+    IMAGE_FILE = IMAGE_FILE.replace("'","''")
+    AZURE_FILE = AZURE_FILE.replace("'","''")
     try:
         update_query("Update AprioBoardPortal.Contact set ProfileImageUrl = '"+AZURE_FILE+"'  , ProfileImageThubUrl = '"+AZURE_FILE+"' where ProfileImageUrl = '"+IMAGE_FILE+"'")
         update_query("Update AprioBoardPortal.Tenant set Logo = '"+AZURE_FILE+"' where Code = '"+MEETING_ID+"' and Logo = '"+IMAGE_FILE+"'")
@@ -125,6 +133,8 @@ def  db_update_profile_images(IMAGE_FILE,AZURE_FILE,MEETING_ID):
 ## Signature Update #
 
 def db_update_signatures(FILE_NAME,AZURE_FILE,TENANT_ID):
+    FILE_NAME = FILE_NAME.replace("'","''")
+    AZURE_FILE = AZURE_FILE.replace("'","''")
     try:
         # print("Update AprioBoardPortal.DocSignature set SignatureProofDocId = '"+AZURE_FILE+"' where TenantId = '"+TENANT_ID+"' and SignatureProofDocId = '"+FILE_NAME+"'")
         update_query("Update AprioBoardPortal.DocSignature set SignatureProofDocId = '"+AZURE_FILE+"' where TenantId = '"+TENANT_ID+"' and SignatureProofDocId = '"+FILE_NAME+"'")
@@ -283,8 +293,8 @@ def azure_upload(MEETING_ID):
     for r,d,f in os.walk(FILES_PATH):        
         if f:
             for file in f:
-                file_path_on_azure = os.path.join(r,file).replace(TMP_DIR+'/','')
-                #file_path_on_azure = os.path.join(r,file).replace(TMP_DIR+"\\","")
+                #file_path_on_azure = os.path.join(r,file).replace(TMP_DIR+'/','')
+                file_path_on_azure = os.path.join(r,file).replace(TMP_DIR+"\\","")
                 file_path_on_local = os.path.join(r,file)
                 # print(file_path_on_azure, file_path_on_local)
                 blob_client = blob_service_client.get_blob_client(container=AZ_CONT_STORAGE,blob=file_path_on_azure)
@@ -304,7 +314,7 @@ def azure_upload(MEETING_ID):
                             print("    [AZURE] Checksum Matched, Skipping [%s]" % (file_path_on_azure))
                         else:
                             ## Reupload if hash is not matching ##
-                            blob_client.upload_blob(data,content_settings=content_setting,overwrite=True)
+                            blob_client.upload_blob(data,content_settings=content_setting,overwrite=True,validate_content=True)
                             print("    [AZURE] Blob ReUploaded @ [%s]" % (file_path_on_azure))
                             pass
                     ## if file is not there then upload fresh one ##       
