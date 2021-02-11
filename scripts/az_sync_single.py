@@ -4,7 +4,7 @@ This file sync all data from defined data directory to Azure blob storage
 & organize the data according to the schema defined in the config (as after discussion)
 """
 
-import  os, glob, shutil, configparser, hashlib, requests, pyodbc, re
+import  os, glob, shutil, configparser, hashlib, requests, pyodbc, re, uuid
 from azure.storage.blob import ContainerClient, BlobServiceClient, BlobClient, ContentSettings
 
 config = configparser.ConfigParser()
@@ -14,7 +14,6 @@ AZ_CONN_STR = config['main']['AZ_CONNECTION_STRING']
 AZ_CONT_STORAGE = config['main']['AZ_CONTAINER_STORAGE']
 # LOC_LOG_FILE = config['main']['LOCAL_LOG_FILE']
 LOC_DIR_STORAGE = config['main']['LOCAL_DIR_STORAGE']
-TMP_DIR = config['main']['TMP_DIR']
 AZ_CONTAINER_LINK = config['main']['AZ_CONTAINER_LINK']
 
 DBHOST = config['destdb']['dst_server']
@@ -28,15 +27,6 @@ API_KEY = config['PDF_API']['API_KEY']
 Media = ["mp4"]
 Document = ["csv","html","htm","pptx","potx","potm","txt","dotx","dot","docx","docm","doc","xltm","xlsx","xlsb","xls","rtf","pdf"]
 Images = ["jpg","gif","bmp","png","jpeg"]
-
-## Calculate Hash of File ##
-
-def calcmd5(filename):
-    md5 = hashlib.md5()
-    with open(filename, 'rb') as f:
-        for chunk in iter(lambda: f.read(128 * md5.block_size), b''):
-            md5.update(chunk)
-    return md5.hexdigest()
 
 ## DB Operations ##
 
@@ -67,12 +57,12 @@ def select_query(qry):
 def update_query(qry):
     cur2.execute(qry)
 
-def pdf_api(TENANT_ID,TENANT_NAME,TENANT_CODE):
+def pdf_api(TENANT_CODE):
     url = API_HOST+"/api/command/MigrationCommand/BulkUpload"
     TENANT_ID = select_query("select Id from AprioBoardPortal.Tenant where Code = '"+TENANT_CODE+"'")
     TENANT_ID = TENANT_ID[4:-4]
-    print(TENANT_ID)
-    print(TENANT_CODE)
+    # print(TENANT_ID)
+    # print(TENANT_CODE)
     querystring = {"tenantId":TENANT_ID,"tenantCode":TENANT_CODE,"migrationKey":API_KEY}
     headers = { 'cache-control': "no-cache" }
     try:
@@ -85,8 +75,8 @@ def pdf_api(TENANT_ID,TENANT_NAME,TENANT_CODE):
         # exit()
 
 ## Db Update Functions ##
-TENANT_ID = 0
-TENANT_NAME = ''
+global TENANT_ID
+global TENANT_NAME
 
 ## Function to Update Db for All files ##
 def db_update_all(TENANT_CODE,FILE_NAME,FILE_SIZE,AZURE_FILE,EXT, TENANT_ID):
@@ -100,12 +90,15 @@ def db_update_all(TENANT_CODE,FILE_NAME,FILE_SIZE,AZURE_FILE,EXT, TENANT_ID):
             pass
         else:
             try:
-                #print("UPDATE AprioBoardPortal.UploadedDoc set FileName = '"+FILE_NAME+"' , FileUrl = '"+AZURE_FILE+"' , FileSize = '"+FILE_SIZE+"' where Id = '"+FID+"' and FileExtension = '"+EXT+"'")
-                update_query("UPDATE AprioBoardPortal.UploadedDoc set FileUrl = '"+AZURE_FILE+"' , FileSize = '"+FILE_SIZE+"' where Id = '"+FID+"' and FileName = '"+FILE_NAME+"'")
+                if EXT == '.pdf':
+                    update_query("UPDATE AprioBoardPortal.UploadedDoc set PdfUrl = '"+AZURE_FILE+"' , PdfSize = '"+FILE_SIZE+"' where Id = '"+FID+"' and FileName = '"+FILE_NAME+"'")
+                else:
+                    update_query("UPDATE AprioBoardPortal.UploadedDoc set FileUrl = '"+AZURE_FILE+"' , FileSize = '"+FILE_SIZE+"' where Id = '"+FID+"' and FileName = '"+FILE_NAME+"'")
                 cur2.commit()
             except Exception as e:
                 print("    [LOCAL] EXCEPTION in DB update : %s" % (e))
                 pass
+
 
 ## Function to Update Db for XFDF files ##
 def  db_update_xfdf(XFDF_FILE,AZURE_FILE):
@@ -136,7 +129,6 @@ def db_update_signatures(FILE_NAME,AZURE_FILE,TENANT_ID):
     FILE_NAME = FILE_NAME.replace("'","''")
     AZURE_FILE = AZURE_FILE.replace("'","''")
     try:
-        # print("Update AprioBoardPortal.DocSignature set SignatureProofDocId = '"+AZURE_FILE+"' where TenantId = '"+TENANT_ID+"' and SignatureProofDocId = '"+FILE_NAME+"'")
         update_query("Update AprioBoardPortal.DocSignature set SignatureProofDocId = '"+AZURE_FILE+"' where TenantId = '"+TENANT_ID+"' and SignatureProofDocId = '"+FILE_NAME+"'")
         cur2.commit()
     except Exception as e:
@@ -155,65 +147,60 @@ def load_signatures_list(TENANT_ID):
             pass
     return signature_file_list
 
+
+## Azure Upload ##
+blob_service_client =  BlobServiceClient.from_connection_string(AZ_CONN_STR)
+def azure_upload(LOCAL_FILE,AZURE_FILE):
+    blob_client = blob_service_client.get_blob_client(container=AZ_CONT_STORAGE,blob=AZURE_FILE)
+    content_setting = ContentSettings(content_type=None)
+
+    with open(LOCAL_FILE, "rb") as data:
+        try:
+            blob_client.upload_blob(data,content_settings=content_setting,overwrite=True,validate_content=True)
+            print("    [AZURE] Uploaded %s " % (AZURE_FILE), end='\r')
+        except Exception as e:
+            pass
+
+
 ## Structurize files in local, Meeting ID ##
 def organize_local(MEETING_ID):
     TENANT_ID = select_query("select Id from AprioBoardPortal.Tenant where Code = '"+MEETING_ID+"'")
     TENANT_ID = TENANT_ID[4:-4]
+    TENANT_CODE = str(MEETING_ID)
     signature_file_list = load_signatures_list(TENANT_ID)
-
-    FILES_PATH = os.path.join(TMP_DIR, MEETING_ID)
-    ## Check Subdirectories Inside Directory, if not then create.
-    LOC_SUBDIRS = [ 'Document','Images','Media', 'Others' ]
-
-    for subdir in LOC_SUBDIRS:
-        subdir_path = os.path.join(FILES_PATH,subdir)
-        if os.path.isdir(subdir_path) == False :
-            os.makedirs(subdir_path,exist_ok=True)
-            print("    [LOCAL] Created SubDir [%s]." % (subdir))
-            pass
-        else:
-            print("    [LOCAL] SubDir [%s] already exists." % (subdir))
-            pass
+    FILES_PATH = os.path.join(LOC_DIR_STORAGE, MEETING_ID)
 
     ## Move files according to extensions , into respective directories.
-    def extensionwise_organize(TYPEPATH,TYPEPATH2):
-        print("    [LOCAL] Processing %s Files" % (TYPEPATH2))
+    def extensionwise_syncing(FILETYPEARRAY,FILETYPE):
+        print("    [LOCAL] Processing %s Files" % (FILETYPE))
         filenum = 0
-        for EXT in TYPEPATH:
-            fileset = [file for file in glob.glob(os.path.join(LOC_DIR_STORAGE, MEETING_ID) + "**/*."+EXT, recursive=True)]
+        for EXT in FILETYPEARRAY:
+            fileset = [file for file in glob.glob(FILES_PATH + "**/*."+EXT, recursive=True)]
             for SRC_FILE in fileset:
-                # print(file)
+                UUID = uuid.uuid4().hex                 ## Assign New UUID ##
                 SRC_FILE_NAME = os.path.basename(SRC_FILE)
                 SRC_FILE_HALF_NAME, SRC_FILE_EXT = os.path.splitext(SRC_FILE_NAME)
-                DST_FILE_STR = os.path.join(FILES_PATH,TYPEPATH2)
-                DST_FILE = os.path.join(DST_FILE_STR,SRC_FILE_HALF_NAME+'_'+calcmd5(SRC_FILE)+SRC_FILE_EXT)   
-
-                # DST_FILE = os.path.join(FILES_PATH,TYPEPATH2)+'/'+SRC_FILE_NAME+'_'+calcmd5(SRC_FILE)
-                # print(file+" -> "+DST_FILE)
-                
-                shutil.copyfile(SRC_FILE, DST_FILE)
-                filenum += 1
-                
-                ## DB Updations for all files ##
+                SRC_FILE_PATH = os.path.join(FILES_PATH, SRC_FILE_NAME)
+                AZURE_FILE_BLOB = str(MEETING_ID+'/'+FILETYPE+'/'+SRC_FILE_HALF_NAME+'_'+UUID+SRC_FILE_EXT)
+                AZURE_FILE_URL = str(AZ_CONTAINER_LINK+AZURE_FILE_BLOB)
                 FILE_SIZE = str(os.path.getsize(SRC_FILE))
-                FILE_NAME = SRC_FILE_NAME
-                TENANT_CODE = str(MEETING_ID)
                 EXT = str(SRC_FILE_EXT)
-                AZURE_FILE = str(AZ_CONTAINER_LINK+MEETING_ID+'/'+TYPEPATH2+'/'+SRC_FILE_HALF_NAME+'_'+calcmd5(SRC_FILE)+SRC_FILE_EXT)
-                db_update_all(TENANT_CODE,FILE_NAME,FILE_SIZE,AZURE_FILE,EXT,TENANT_ID)
-                # print("[%s]"%(FILE_NAME))
-                if FILE_NAME in signature_file_list: 
-                    # print("Updating %s in LIST" % (FILE_NAME))
-                    db_update_signatures(FILE_NAME,AZURE_FILE,TENANT_ID)
+                azure_upload(SRC_FILE_PATH,AZURE_FILE_BLOB)                                         ## Azure Upload ##
+                db_update_all(TENANT_CODE,SRC_FILE_NAME,FILE_SIZE,AZURE_FILE_URL,EXT,TENANT_ID)     ## Db Update ##
+                if SRC_FILE_NAME in signature_file_list: 
+                    db_update_signatures(SRC_FILE_NAME,AZURE_FILE_URL,TENANT_ID)                    ## Db Update ##
+
+                filenum += 1
 
             if len(fileset) == 0 :
                 pass
             else :
-                print("    [LOCAL] Synced %d %s files to %s directory" % (len(fileset), EXT, TYPEPATH2) )
+                print("\n    [%s] Uploaded %d %s files. " % (MEETING_ID, len(fileset), EXT) )
                 pass
 
         if filenum > 0:
-            print("    [LOCAL] TOTAL %d files Synced to [%s]" % (filenum, TYPEPATH2) )
+            print("    [%s] TOTAL %d files Uploaded to [%s]" % (MEETING_ID, filenum, FILETYPE) )
+
 
     ## Move rest of the files & directores to Others ##
     def rest_to_others(SUBDIR):
@@ -233,97 +220,51 @@ def organize_local(MEETING_ID):
                 filenum += 1
 
         if filenum > 0:
-            print("    [LOCAL] TOTAL %d files Synced to [%s]" % (filenum, SUBDIR) )
+            print("    [%s] TOTAL %d files Uploaded to [%s]" % (MEETING_ID,filenum, SUBDIR) )
 
     def xfdf_organize(MEETING_ID):
         print("    [LOCAL] Processing XFDF Files")
-        FILES_PATH = os.path.join(TMP_DIR, MEETING_ID)
-        DST_PATH = os.path.join(FILES_PATH,"Others")
         LOCAL_TEMP_DIR = os.path.join(LOC_DIR_STORAGE,"Temp")
         filenum = 0
         for path, currentDirectory, files in os.walk(LOCAL_TEMP_DIR):
             for file in files:
                 if file.startswith("anma"+MEETING_ID) or file.startswith("anev"+MEETING_ID) or file.startswith("ando"+MEETING_ID):
-                    checkfile = file
-                    if os.path.splitext(checkfile)[1] == ".xfdf":
-                        # print(file)
+                    SRC_FILE_NAME = file
+                    SRC_FILE_PATH = os.path.join(LOCAL_TEMP_DIR,SRC_FILE_NAME)
+                    if os.path.splitext(SRC_FILE_NAME)[1] == ".xfdf":
+                        AZURE_FILE_BLOB = str(MEETING_ID+'/'+"Others"+'/'+SRC_FILE_NAME)
+                        AZURE_FILE_URL = str(AZ_CONTAINER_LINK+AZURE_FILE_BLOB)
+                        azure_upload(SRC_FILE_PATH,AZURE_FILE_BLOB)
+                        db_update_xfdf(SRC_FILE_NAME,AZURE_FILE_URL)
                         filenum += 1
-                        SRC_PATH = os.path.join(LOCAL_TEMP_DIR, checkfile)
-                        shutil.copy(SRC_PATH, DST_PATH)
-                        AZURE_FILE = str(AZ_CONTAINER_LINK+MEETING_ID+"/Others/"+checkfile)
-                        db_update_xfdf(checkfile,AZURE_FILE)
-        print("    [LOCAL] Synced %d %s files to [Others]" % (filenum, ".xfdf") )
+
+        print("\n    [%s] Uploaded %d %s files. " % (MEETING_ID, filenum, ".xfdf") )
 
 
     def profile_images_organize(MEETING_ID):
         print("    [LOCAL] Processing Profile Images")
-        LOCAL_DATA_DIR = os.path.join(LOC_DIR_STORAGE,MEETING_ID)
-        SRC_PATH = os.path.join(LOCAL_DATA_DIR,"Images")
-        LOCAL_TMP_DIR = os.path.join(TMP_DIR, MEETING_ID)
-        DST_PATH = os.path.join(LOCAL_TMP_DIR,"Images")
+        SRC_PATH = os.path.join(FILES_PATH,"Images")
         filenum = 0
         for path, currentDirectory, files in os.walk(SRC_PATH):
             for file in files:
-                checkfile = file
+                UUID = uuid.uuid4().hex             ## Assign New UUID ##
+                SRC_FILE_NAME = file
+                SRC_FILE_PATH = os.path.join(SRC_PATH, SRC_FILE_NAME)
+                SRC_FILE_HALF_NAME, SRC_FILE_EXT = os.path.splitext(SRC_FILE_NAME)
+                AZURE_FILE_BLOB = str(MEETING_ID+'/'+"Images"+'/'+SRC_FILE_HALF_NAME+'_'+UUID+SRC_FILE_EXT)
+                AZURE_FILE_URL = str(AZ_CONTAINER_LINK+AZURE_FILE_BLOB)
+                azure_upload(SRC_FILE_PATH,AZURE_FILE_BLOB)                             ## Azure Upload ##
+                db_update_profile_images(SRC_FILE_NAME,AZURE_FILE_URL,MEETING_ID)       ## Db Update ##
                 filenum += 1
-                SRC_FILE = os.path.join(SRC_PATH, checkfile)
-                filename, file_extension = os.path.splitext(checkfile)
-                filehash = calcmd5(SRC_FILE)
-                NEW_FILE_NAME = filename+'_'+filehash+file_extension
-                DST_FILE = os.path.join(DST_PATH,NEW_FILE_NAME)
-                shutil.copy(SRC_FILE, DST_FILE)
-                AZURE_FILE = str(AZ_CONTAINER_LINK+MEETING_ID+"/Images/"+NEW_FILE_NAME)
-                db_update_profile_images(checkfile,AZURE_FILE,MEETING_ID)
 
-        print("    [LOCAL] Synced %d Profile Images to [Images]" % (filenum) )
+        print("\n    [%s] Uploaded %d Profile Images to [Images]. " % (MEETING_ID, filenum) )
         pass
 
     profile_images_organize(MEETING_ID)
     xfdf_organize(MEETING_ID)
-    extensionwise_organize(Document,"Document")
-    extensionwise_organize(Images,"Images")
-    extensionwise_organize(Media,"Media")
-
-def azure_upload(MEETING_ID):
-    # FILES_PATH = os.path.join(LOC_DIR_STORAGE, MEETING_ID)
-    FILES_PATH = os.path.join(TMP_DIR, MEETING_ID)
-
-    blob_service_client =  BlobServiceClient.from_connection_string(AZ_CONN_STR)
-    filenum = 0
-    for r,d,f in os.walk(FILES_PATH):        
-        if f:
-            for file in f:
-                #file_path_on_azure = os.path.join(r,file).replace(TMP_DIR+'/','')
-                file_path_on_azure = os.path.join(r,file).replace(TMP_DIR+"\\","")
-                file_path_on_local = os.path.join(r,file)
-                # print(file_path_on_azure, file_path_on_local)
-                blob_client = blob_service_client.get_blob_client(container=AZ_CONT_STORAGE,blob=file_path_on_azure)
-
-                ## Check Md5 on Azure ##
-                md5hash = calcmd5(file_path_on_local)
-                local_hash = md5hash
-                content_setting = ContentSettings(content_type=None)
-                filenum += 1
-                with open(file_path_on_local, "rb") as data:
-                    try:
-                        azure_prop = blob_client.get_blob_properties()
-                        azure_hash = azure_prop.content_settings.content_md5.hex()
-                        # print("%s == %s" %(azure_hash, local_hash))
-                        if azure_hash == local_hash:
-                            ## Skip upload if hash matched ##
-                            print("    [AZURE] Checksum Matched, Skipping [%s]" % (file_path_on_azure))
-                        else:
-                            ## Reupload if hash is not matching ##
-                            blob_client.upload_blob(data,content_settings=content_setting,overwrite=True,validate_content=True)
-                            print("    [AZURE] Blob ReUploaded @ [%s]" % (file_path_on_azure))
-                            pass
-                    ## if file is not there then upload fresh one ##       
-                    except Exception as e:
-                        blob_client.upload_blob(data,content_settings=content_setting,overwrite=True)
-                        print("    [AZURE] Blob Uploaded @ [%s]" % (file_path_on_azure))
-                        pass
-
-    print("    [+] Parsed Total %d files from %s" % (filenum,MEETING_ID))
+    extensionwise_syncing(Document,"Document")
+    extensionwise_syncing(Images,"Images")
+    extensionwise_syncing(Media,"Media")
 
 
 def MAINS(MEETING_ID):
@@ -331,7 +272,6 @@ def MAINS(MEETING_ID):
     ## Connect AZ
     container_client = ContainerClient.from_connection_string(conn_str=AZ_CONN_STR, container_name=AZ_CONT_STORAGE)
     print("[+] Connected to Azure.")
-
     ## Check if container Exists, If not then create.
     try:
         container_properties = container_client.get_container_properties()
@@ -341,7 +281,7 @@ def MAINS(MEETING_ID):
         print("[-] Container [%s] Not Found on Azure, Creating ..." % (AZ_CONT_STORAGE))
         container_client.create_container()
 
-    # Check if LOC_DIR_STORAGE Exists or NOT
+    ## Check if LOC_DIR_STORAGE Exists or NOT
 
     is_locdir = os.path.isdir(LOC_DIR_STORAGE)  
 
@@ -353,12 +293,10 @@ def MAINS(MEETING_ID):
 
     FILES_PATH = os.path.join(LOC_DIR_STORAGE, MEETING_ID)
     if os.path.isdir(FILES_PATH) == True:
-        # print("[+] Congo its a directory")
         print("[+] Processing ORGID [%s]" % (MEETING_ID))
         organize_local(MEETING_ID)
-        azure_upload(MEETING_ID)
-        pdf_api(TENANT_ID,TENANT_NAME,MEETING_ID)
-        print ("[+] SUCESSFULLY Synced ORGID [%s] to Azure" % (MEETING_ID))
+        pdf_api(MEETING_ID)
+        print ("[+] SUCESSFULLY Synced Tenant [%s] to Azure" % (MEETING_ID))
     else:
-        print("[-] ORGID [%s] doesn't exists in Local Data Directory" % (MEETING_ID))
+        print("[-] Tenant [%s] doesn't exists in Local Data Directory" % (MEETING_ID))
         exit
