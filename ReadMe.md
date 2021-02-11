@@ -54,22 +54,21 @@ cp config.ini.example config.ini
 
 Extract `SampleData.zip` to `Data` Directory & make sure you have activated `venv` as stated above
 
-Sync ALL The Directories from CLI to Azure
-```
-python scripts/az_sync.py
-```
 
 Delete Azure blob storage/ Clean Up
 ```
 python scripts/az_cleanup.py
 ```
 
-Check if Able to fetch the rows from the Database
-```
-python scripts/mssqltest.py
-```
 
 GUI APP (Just Select The Organization & Sync one at a time to Azure)
 ```
 python scripts/gtkapp.py
 ```
+
+Select Organization Name & Click `Sync` on the Utility
+
+
+<p align="center">
+<img src="tmp/refimage1.png" alt="Utility" title="Utility" />
+</p>
