@@ -1,36 +1,64 @@
+#######################################################
+## This is the main configuration file for the utility
+#######################################################
+
 [main]
 
+#######################################################
+## APP Config
+#######################################################
+
 ## Azure connection String
-AZ_CONNECTION_STRING = AZURE_STORAGE_CONNECTION_STRING_HERE
+AZ_CONNECTION_STRING = AZure_Connection_string_here ##
 
-## Azure account storage ##
-AZ_CONTAINER_STORAGE = test1234
+## Azure account storage account name ##
+AZ_CONTAINER_STORAGE = aprioboardportal
 
-## Path to logfile
-LOCAL_LOG_FILE = /home/abhi/RSI/Aprio/Aprio-azure-utility/logs.txt
+## Azure blob link including container ##
+AZ_CONTAINER_LINK = https://devapriostorageus.blob.core.windows.net/aprioboardportal/
 
-## Local Storage directory
+## Local Storage directory - where the utility will find the data of organizations ##
 LOCAL_DIR_STORAGE = /home/abhi/RSI/Aprio/Aprio-azure-utility/Data
 
-## Keeping Temp files
-TMP_DIR = /home/abhi/RSI/Aprio/Aprio-azure-utility/tmp
+## The directory where utility is cloned or Placed ##
+WORK_DIR = /home/abhi/RSI/Aprio/Aprio-azure-utility
 
-## Database Details ##
 
-[DB_AprioSQLPortals]
-DBHOST = tcp:SEZ35MOBILIZE\SQL2017
-DBNAME = AprioSQLPortals 
-DBUSER = DBUSER
-DBPASS = DBPASS
+#######################################################
+## DB Config
+#######################################################
 
-[DB_AprioUSDB]
-DBHOST = tcp:SEZ35MOBILIZE\SQL2017
-DBNAME = AprioUSDB 
-DBUSER = DBUSER
-DBPASS = DBPASS
+[sourcedb]
+src_server = SEZ35MOBILIZE\SQL2017
+src_db = AprioSQLPortals
+src_user = sa
+src_pwd = Rsys_1234
+stage_db = AprioMigrationTest
 
-## PDF Conversion API Details ##
+[destdb]
+dst_server = abpdev.database.windows.net,1433
+dst_db = AprioUSDB
+dst_user = apriosqladmin
+dst_pwd = tyRtinoPSxn4
 
-[API]
-API_HOST = http://localhost:2000
+[accessdb]
+ACCESS_DB_PARENT_FOLDER = F:\Aprio\Migration\Data
+
+## Script Folder ##
+
+[script]
+script_folder = F:\Aprio\Migration\Migration Scripts - Git\SQL Migration\Scripts
+
+
+
+#######################################################
+## API Confog
+#######################################################
+
+[PDF_API]
+API_HOST = https://qa-ca-aprioapi.azurewebsites.net
+API_KEY = migration_key
+
+[PWD_API]
+API_HOST = https://qa-ca-aprioapi.azurewebsites.net
 API_KEY = migration_key

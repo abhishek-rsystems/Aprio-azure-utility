@@ -1,6 +1,6 @@
 """
-This is the Main GUI app file which pulls the detaisl from Database & then render the same to Tkinter app
-On selecting the button, itsync the same,
+This is the Main GUI app file which pulls the details from Database & then render the same to Tkinter app
+On selecting the button, this sync the respective Tenant ID
 """
 
 import pyodbc, configparser, os
@@ -13,19 +13,22 @@ import DataMigrationUtility as dm
 config = configparser.ConfigParser()
 config.read('config.ini')
 
-TMP_DIR = config['main']['TMP_DIR']
+WORK_DIR = config['main']['WORK_DIR']
+TMP_DIR = os.path.join(WORK_DIR,"appdata")
+
 DBHOST = config['sourcedb']['src_server']
 DBNAME = config['sourcedb']['src_db']
 DBUSER = config['sourcedb']['src_user']
 DBPASS = config['sourcedb']['src_pwd']
 
 try:
+    print("! Connecting DB [%s/%s]" % (DBHOST,DBNAME), end='\r')
     cnxn = pyodbc.connect('Driver={ODBC Driver 17 for SQL Server};SERVER='+DBHOST+';DATABASE='+DBNAME+';UID='+DBUSER+';PWD='+ DBPASS)
+    print("✓ Connected to DB [%s/%s]" % (DBHOST,DBNAME))
 except Exception as e:
-    print("[-] Failed to connect to DB @ %s" % (DBHOST))
+    print("[-] Failed to connect to DB [%s/%s]" % (DBHOST))
     exit()
 cur = cnxn.cursor()
-print("[+] Connected to DB @ %s/%s" % (DBHOST,DBNAME))
 qry = 'SELECT OrgName,OrgAlias FROM dbo.tOrganizations'
 global SQLDATA
 SQLDATA = ''
@@ -65,7 +68,8 @@ root = Tk()
 
 ## banner & Logo ##
 root.wm_title("Aprio Data Sync Utility")
-FAVICON = os.path.join(TMP_DIR,"favicon.png")
+IMG_DIR = os.path.join(TMP_DIR,"images")
+FAVICON = os.path.join(IMG_DIR,"favicon.png")
 root.call('wm', 'iconphoto', root._w, PhotoImage(file=FAVICON))
 root.geometry(GEOMETRY)
 
@@ -80,12 +84,12 @@ drop = OptionMenu( root , clicked , *res )
 drop.pack()
 
 ## Sync and Exit Buttons ##
-ICON1PATH = os.path.join(TMP_DIR,"sync.png")
+ICON1PATH = os.path.join(IMG_DIR,"sync.png")
 icon1 = PhotoImage(file = r"%s" % ICON1PATH) 
 pim1 = icon1.subsample(x=15,y=15) 
 Button(root, text = '[ SYNC ]', image = pim1, compound = RIGHT, command = clicksel ).pack(side = LEFT, padx=20) 
 
-ICON2PATH = os.path.join(TMP_DIR,"exit.png")
+ICON2PATH = os.path.join(IMG_DIR,"exit.png")
 icon2 = PhotoImage(file = r"%s" % ICON2PATH) 
 pim2 = icon2.subsample(x=27,y=27)
 Button(root, text = '[ EXIT ]', image = pim2, compound = RIGHT, command = close).pack(pady=20, padx=20, side = RIGHT)

@@ -4,8 +4,8 @@ Data/*
 *.pyc
 venv
 *.ini
-logs.txt
-tmp/*
-!tmp/.gitkeep
-!tmp/*.png
+*.txt
+apdata/*
+!.gitkeep
+appdata/logs/*.log
 test*.py
